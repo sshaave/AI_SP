@@ -390,6 +390,9 @@ class Optimizer_Adam:
     def post_update_param(self):
         self.iterations += 1
 # -------------------------------------
+# FLAG
+save_Layers = True
+load_Layers = False
 # Create dataset
 def readTrainingData():
     global X_training, y_training
@@ -421,7 +424,7 @@ dense2 = Layer_Dense(64, 124)
 loss_activation = Activation_Softmax_Loss_CategoricalCrossentropy()
 
 # Create optimizer
-optimizer = Optimizer_Adam(learning_rate=0.05, decay=5e-7)
+optimizer = Optimizer_Adam(learning_rate=0.07, decay=5e-7)
 
 # -------------------------------------------
 for epoch in range(5001):
@@ -500,3 +503,17 @@ accuracy = np.mean(predictions == y_test)
 
 print(f'validation, acc: {accuracy:.3f}, loss: {loss:.3f}')
 print(time.time() - t)
+
+if save_Layers:
+    with open('saved_Layer1.pk', 'wb') as f1:
+        # dump data into the file
+        pickle.dump(dense1, f1)
+    with open('saved_Layer2.pk', 'wb') as f2:
+        # dump data into the file
+        pickle.dump(dense2, f2)
+
+if load_Layers:
+    with open("saved_Layer1.pk", 'rb') as fti1:
+        layer1 = pickle.load(fti1)
+    with open("saved_Layer2.pk", 'rb') as fti2:
+        layer2 = pickle.load(fti2)
