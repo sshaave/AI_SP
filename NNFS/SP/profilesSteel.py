@@ -12,7 +12,9 @@ fy_0 = 355
 gamma1 = 1.05
 l_trainingData = 0 # 5002
 l_testData = 0 # 2000
-
+failure = 1000
+E_steel = 2.1e5
+def_limit = 250
 class Profile:
     def __init__(self, name, weight, area, av_z, av_y, wel_y, wel_z, I_y, I_z, I_T, W_T, I_w, W_w, buck_Maj_axis, buck_Min_axis, fy = fy_0):
         self.name = name
@@ -45,20 +47,27 @@ class Profile:
     def getM_z(self):
         # enhet: kNm
         return self.wel_z * self.fy / gamma1 / 1000
+    def getI_z(self):
+        # enhet 10^6 mm3
+        return self.I_z
 
-def evaluateProfile(profile: Profile, V_Ed_y, V_Ed_z, M_Ed_y, M_Ed_z):
+def evaluateProfile(profile: Profile, l, q_load, V_Ed_y, V_Ed_z, M_Ed_y, M_Ed_z):
+    global failure, E_steel, def_limit
     M_Rd_y = profile.getM_y()
     M_Rd_z = profile.getM_z()
     V_Rd_y = profile.getV_y()
     V_Rd_z = profile.getV_z()
+    I_z = profile.getI_z()
     if V_Ed_y > V_Rd_y:
-        return 10000
+        return failure
     elif V_Ed_z > V_Rd_z:
-        return 10000
+        return failure
     elif M_Ed_y > M_Rd_y:
-        return 10000
+        return failure
     elif M_Ed_z > M_Rd_z:
-        return 10000
+        return failure
+    elif 5*q_load*l**4 / (384 * E_steel * I_z) * 1e6 > 1000 * l / def_limit:
+        return failure
     else:
         return profile.weight
 
@@ -434,15 +443,15 @@ listREKHUP = [Profile("RHS 40x20 / 2", 1.68, 214, 142, 71, 2.025, 1.343, 0.0405,
 
 def findBestProfile(span, q_load, list):
     iter=0
-    bestWeight = 500
+    bestWeight = 1001
     V_z = span*q_load / 2
     M_y = span**2 * q_load / 8
     for profileList in list:
         for listIter in range(len(profileList)):
             iter += 1
-            weightCurrentProfile = evaluateProfile(profileList[listIter], 0, V_z, M_y, 0)
+            weightCurrentProfile = evaluateProfile(profileList[listIter], span, q_load, 0, V_z, M_y, 0)
             if weightCurrentProfile < bestWeight:
-                numberEncoded = iter -1
+                numberEncoded = iter - 1
                 bestWeight = weightCurrentProfile
                 bestProfile = profileList[listIter]
     return bestProfile, numberEncoded
@@ -7534,3 +7543,5 @@ for x in range(1, 10):
     print(f" \t Lengde l: {X_training[x][0]}, last q: {X_training[x][1]}. Beste profil: {y_training[x]}")
 print(isinstance(y_training[0], np.uint8))
 #print(l_trainingData)
+pro1, encod1 = findBestProfile(7, 5.0, list)
+print(pro1.name, encod1)
