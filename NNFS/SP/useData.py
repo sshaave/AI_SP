@@ -35,3 +35,6 @@ predictions = np.argmax(loss_activation1.output, axis=1)
 accuracy1 = np.mean(predictions == y_test4)
 print(predictions)
 print(layer1.weights)
+
+for i in range(64):
+    print(layer1.weights[1][i])

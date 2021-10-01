@@ -460,9 +460,9 @@ class Optimizer_Adam:
 # -------------------------------------
 # FLAG
 train_AI = True
-save_Layers = False
+save_Layers = True
 load_Layers = False
-following_book = True
+following_book = False
 # Create dataset
 def readTrainingData():
     global X_training, y_training
@@ -590,13 +590,16 @@ if train_AI:
     print(f'validation, acc: {accuracy:.3f}, loss: {loss:.3f}')
     # print(time.time() - t)
 
-if save_Layers:
-    with open('saved_Layer1.pk', 'wb') as f1:
-        # dump data into the file
-        pickle.dump(dense1, f1)
-    with open('saved_Layer2.pk', 'wb') as f2:
-        # dump data into the file
-        pickle.dump(dense2, f2)
+if accuracy > 0.963:
+    if save_Layers:
+        with open('saved_Layer1.pk', 'wb') as f1:
+            # dump data into the file
+            pickle.dump(dense1, f1)
+        with open('saved_Layer2.pk', 'wb') as f2:
+            # dump data into the file
+            pickle.dump(dense2, f2)
+
+        print(f'Layers saved - new accuracy based off validation test: {accuracy:.3f}')
 
 if load_Layers:
     with open("saved_Layer1.pk", 'rb') as fti1:
