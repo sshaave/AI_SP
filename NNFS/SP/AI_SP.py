@@ -483,6 +483,7 @@ class Optimizer_Adam:
         self.iterations += 1
 # -------------------------------------
 # FLAG
+
 train_AI = True
 save_Layers = True
 load_Layers = False
