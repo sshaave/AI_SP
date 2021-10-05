@@ -7,7 +7,7 @@ l = 5.0
 q = 2.0
 
 np.random.seed(42)
-sizeTraining = 5000
+sizeTraining = 10000
 sizeTest = 2000
 l_min = 1
 l_max = 12
@@ -52,5 +52,5 @@ def readTrainingData():
         count += 1
         print(line)
 
-#writeTrainingInstances(x_matrix)
+writeTrainingInstances(x_matrix)
 writeTestInstances(x_matrix)

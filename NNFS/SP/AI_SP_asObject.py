@@ -2,6 +2,7 @@ import numpy as np
 import nnfs
 import pickle
 import time
+import matplotlib.pyplot as plt
 
 
 # Model class
@@ -888,9 +889,11 @@ current_Best_Accuracy = 0
 # Read training data and validation/test from the binary pickle
 readTrainingData()
 readTestData()
-best_LR = 0
+best_LR = 0.029
+l_rates = []
+accuracies = []
 for l_rate in range(1, 20):
-    learning_rate = 0.01 + l_rate / 1000
+    learning_rate = 0.01 + l_rate / 1000    # best learning rate: 0.029
     if train_AI:
 
         # Instantiate the model
@@ -915,12 +918,18 @@ for l_rate in range(1, 20):
 
         # Train the model
         model.train(X_training, y_training, validation_data=(X_test, y_test), epochs=5000, print_every=100)
+
+    l_rates.append(learning_rate)
+    accuracies.append(model.accuracy)
+
     if model.accuracy > current_Best_Accuracy:
         best_LR = learning_rate
         current_Best_Accuracy = model.accuracy
+        print(f'Current LR: {learning_rate}' +
+              f'Accuracy: {model.accuracy}')
 
-print(f'Best LR: {learning_rate}' +
-      f'accuracy: {current_Best_Accuracy}')
+    print(f'Best LR: {learning_rate}' +
+         f'accuracy: {current_Best_Accuracy}')
 if model.accuracy > 0.975:
     if save_Layers:
         with open('AI_SP_model.pk', 'wb') as f1:
@@ -934,4 +943,9 @@ if load_Layers:
         model = pickle.load(fti1)
 
 
-# best LR for 0.01 + i / 1000, i = 1,20 -> 1,29. Acc = 0.975
+# best LR for 0.01 + i / 1000, i = 1,20 -> .0029 Acc = 0.975
+plt.plot(l_rates, accuracies)
+plt.xlabel('learning rate')
+plt.ylabel('accuracy')
+plt.show()
+# best LR 0.028, acc = 0.969
