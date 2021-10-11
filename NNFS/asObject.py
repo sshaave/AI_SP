@@ -1144,6 +1144,7 @@ LOAD_MODEL = False
 MINIMAL_EXAMPLE = False
 EXAMPLE_10 = False
 EXAMPLE_11 = True
+DO_BAY_OPT = False
 # --------------------------------------------
 if TRAIN_MODEL:
     X, y = spiral_data(samples=100, classes=3)
@@ -1312,15 +1313,23 @@ if EXAMPLE_11:
 
     #fitness(x=default_parameters)
     # default yields accuracy = 0.710, loss 0.820
+    if DO_BAY_OPT:
+        search_result = gp_minimize(func=fitness,
+                                    dimensions=dimensions,
+                                    acq_func="EI",
+                                    n_calls=18,
+                                    x0=default_parameters)
 
-    search_result = gp_minimize(func=fitness,
-                                dimensions=dimensions,
-                                acq_func="EI",
-                                n_calls=40,
-                                x0=default_parameters)
+
+        with open("search_result_pickle.pk", 'wb') as f:
+            pickle.dump(search_result, f)
+    else:
+        with open("search_result_pickle.pk", "rb") as f:
+            search_result = pickle.load(f)
+
 
     plot_convergence(search_result)
-    plt.savefig("Convergence.png", dpi=400)
+    #plt.savefig("Convergence.png", dpi=400)
     print('Search_result.x:')
     print(search_result.x)
 
@@ -1328,10 +1337,13 @@ if EXAMPLE_11:
     print(sorted(zip(search_result.func_vals, search_result.x_iters)))
 
     fig = plot_objective_2D(result=search_result,
-                            dimension_identifier1='wb1',
-                            dimension_identifier2='wb2',
-                            levels=50)
-    plt.savefig("Lr_numnods.png", dpi=400)
+                            dimension_identifier1='wr1',
+                            dimension_identifier2='wr2',
+                            n_samples=18,
+                            n_points=18,
+                            levels=18)
+    plt.savefig("wrL.png", dpi=400)
+    plt.show()
     '''
     Search_result.x:
     [1.22724151191499e-08, 1.3244871554343121e-07, 5.071166851500468e-08, 1.910295036087759e-06]
