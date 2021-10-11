@@ -1328,7 +1328,7 @@ if EXAMPLE_11:
             search_result = pickle.load(f)
 
 
-    plot_convergence(search_result)
+    #plot_convergence(search_result)
     #plt.savefig("Convergence.png", dpi=400)
     print('Search_result.x:')
     print(search_result.x)
@@ -1339,9 +1339,7 @@ if EXAMPLE_11:
     fig = plot_objective_2D(result=search_result,
                             dimension_identifier1='wr1',
                             dimension_identifier2='wr2',
-                            n_samples=18,
-                            n_points=18,
-                            levels=18)
+                            levels=50)
     plt.savefig("wrL.png", dpi=400)
     plt.show()
     '''
