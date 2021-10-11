@@ -1139,37 +1139,54 @@ class Activation_Softmax_Loss_CategoricalCrossentropy():
         self.dinputs = self.dinputs / samples
 # --------------------------------------------
 # FLAGS
+
+#-------------------------------------------------------------
+def readTrainingData():
+    with open("SP/trainingData_pickle.pk", 'rb') as fi1:
+        X_training = pickle.load(fi1)
+    with open("SP/trainingData_Y_pickle.pk", 'rb') as fi2:
+        y_training = pickle.load(fi2)
+    return X_training, y_training
+
+def readTestData():
+    with open("SP/testData_pickle.pk", 'rb') as fti1:
+        X_test = pickle.load(fti1)
+    with open("SP/testData_Y_pickle.pk", 'rb') as fti2:
+        y_test = pickle.load(fti2)
+    return X_test, y_test
+def readEncoding():
+    with open("SP/Encoding.txt") as tF:
+        lines = [line.strip().split('\t') for line in tF]
+    return lines
+
+#-------------------------------------------------------------
 TRAIN_MODEL = False
 LOAD_MODEL = False
-MINIMAL_EXAMPLE = False
-EXAMPLE_10 = False
 EXAMPLE_11 = True
-DO_BAY_OPT = False
-# --------------------------------------------
+DO_BAY_OPT = True
+# -------------------------------------------------------------
 if TRAIN_MODEL:
-    X, y = spiral_data(samples=100, classes=3)
-    X_test, y_test = spiral_data(samples=100, classes=3)
-
-    # Reshape labels to be a list of lists
-    # Inner list contains one output (either 0 or 1)
-    # per each output neuron, 1 in this case
-    #y = y.reshape(-1, 1)
-    #y_test = y_test.reshape(-1, 1)
+    X_training, y_training = readTrainingData()
+    X_test, y_test = readTestData()
 
     # Instantiate the model
     model = Model()
-
+    neurons = 128
+    wrl1 = 5e-4
+    wrl2 = 5e-4
+    LR = 0.028
+    decay = 5e-5
     # Add layers
-    model.add(Layer_Dense(2, 512, weight_regularizer_l2=5e-4, bias_regularizer_l2=5e-4))
+    model.add(Layer_Dense(3, neurons, weight_regularizer_l2=wrl1, bias_regularizer_l2=wrl2))
     model.add(Activation_ReLU())
-    model.add(Layer_Dropout(0.1))
-    model.add(Layer_Dense(512, 3))
+    #model.add(Layer_Dropout(0.1))
+    model.add(Layer_Dense(neurons, 148))
     model.add(Activation_Softmax())
 
     # Set loss and optimizer objects
     model.set(
         loss=Loss_CategoricalCrossentropy(),
-        optimizer=Optimizer_Adam(learning_rate=0.05, decay=5e-5),
+        optimizer=Optimizer_Adam(learning_rate=LR, decay=decay),
         accuracy=Accuracy_Catergorial()
     )
 
@@ -1177,7 +1194,7 @@ if TRAIN_MODEL:
     model.finalize()
 
     # Train the model
-    model.train(X, y, validation_data=(X_test, y_test), epochs=1000, print_every=100)
+    model.train(X_training, y_training, validation_data=(X_test, y_test), epochs=1000, print_every=100)
 
     # Evaluate the model
     model.evaluate(X_test, y_test)
@@ -1186,88 +1203,53 @@ if TRAIN_MODEL:
     parameters = model.get_parameters()
 
     # Save models parameters (weights and biases)
-    model.save_parameters('notMNIST.parms')
+    model.save_parameters('steelData.parms')
 
     # load model
-    model.load_parameters('notMNIST.parms')
+    #load_parameters('SteelData.parms')
 
     # save the whole model
-    model.save('fullModelnotMNIST.model')
+    model.save('steelData.model')
 
 # load the whole model
 if LOAD_MODEL:
-    X_train, y_train = spiral_data(samples=100, classes=3)
-    model = Model.load('fullModelnotMNIST.model')
-    confidences = model.predict(X_train[:5])
+    X_train, y_train = readTrainingData()
+    X_test, y_test = readTestData()
+    model = Model.load('steelData.model')
+    confidences = model.predict(X_train[50:90])
     predictions = model.output_layer_activation.predictions(confidences)
     print(predictions)
+    labels = readEncoding()
 
-    spiral_labels = {0: 'blue', 1: 'red', 2: 'green'}
 
     for prediction in predictions:
-        print(spiral_labels[prediction])
+        print(labels[prediction][2])
 
-# Minimal example
-if MINIMAL_EXAMPLE:
-    X, y = load_digits(n_class=10, return_X_y=True)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.75, test_size=.25, random_state=0)
-
-    # log-uniform: understand as search over p = exp(x) by varying x
-    opt = BayesSearchCV(
-        SVC(),
-        {
-            'C': (1e-6, 1e+6, 'log-uniform'),
-            'gamma': (1e-6, 1e+1, 'log-uniform'),
-            'degree': (1, 8),  # integer valued parameter
-            'kernel': ['linear', 'poly', 'rbf'],  # categorical parameter
-        },
-        n_iter=32,
-        cv=3
-    )
-
-    opt.fit(X_train, y_train)
-
-# Example 10
-if EXAMPLE_10:
-    print('Example 10')
-    search_space = {'wrl1': Integer(5e-5, 5e-4, 'log-uniform'),
-                    'brl1': Integer(5e-5, 5e-4, 'log-uniform'),
-                    'wrl2': Integer(5e-5, 5e-4, 'log-uniform'),
-                    'brl2': Integer(5e-5, 5e-4, 'log-uniform')
-                  }
-    def on_step(optim_result):
-        score = forest_bayes_search.best_score_
-        print("best score: %s" % score)
-        if score >= 0.98:
-            print('Interrupting!')
-            return True
-
-
-    forest_bayes_search = BayesSearchCV(model, search_space, n_iter=32,
-                                        scoring="accuracy", n_jobs=-1, cv=5)
-    forest_bayes_search.fit(X_train, y_train, callback=on_step)
 
 if EXAMPLE_11:
     print('Example 11')
 
+    dim_neurons = Integer(low=60, high=150, name="neurons")
     dim_wr1 = Real(low=1e-8, high=1e-5, prior='log-uniform', name='wr1')
     dim_br1 = Real(low=1e-8, high=1e-5, prior='log-uniform', name='br1')
     dim_wr2 = Real(low=1e-8, high=1e-5, prior='log-uniform', name='wr2')
     dim_br2 = Real(low=1e-8, high=1e-5, prior='log-uniform', name='br2')
-    dimensions = [dim_wr1, dim_br1, dim_wr2, dim_br2]
+    dim_LR = Real(low=1e-3, high=9e-2, prior='log-uniform', name='LR')
+    dim_decay = Real(low=1e-7, high=1e-4, prior='log-uniform', name='decay')
+    dimensions = [dim_neurons, dim_wr1, dim_br1, dim_wr2, dim_br2, dim_LR, dim_decay]
 
-    def create_model(wr1, br1, wr2, br2):
+    def create_model(neurons, wr1, br1, wr2, br2, LR, decay):
         model = Model()
         # Add layers
-        model.add(Layer_Dense(2, 64, weight_regularizer_l1=wr1, bias_regularizer_l1=br1, weight_regularizer_l2=wr2, bias_regularizer_l2=br2))
+        model.add(Layer_Dense(3, neurons, weight_regularizer_l1=wr1, bias_regularizer_l1=br1, weight_regularizer_l2=wr2, bias_regularizer_l2=br2))
         model.add(Activation_ReLU())
-        model.add(Layer_Dense(64, 124))
+        model.add(Layer_Dense(neurons, 148))
         model.add(Activation_Softmax())
 
         # Set loss and optimizer objects
         model.set(
             loss=Loss_CategoricalCrossentropy(),
-            optimizer=Optimizer_Adam(learning_rate=0.028, decay=5e-6),
+            optimizer=Optimizer_Adam(learning_rate=LR, decay=decay),
             accuracy=Accuracy_Catergorial()
         )
 
@@ -1277,7 +1259,7 @@ if EXAMPLE_11:
         return model
 
     @use_named_args(dimensions=dimensions)
-    def fitness(wr1, br1, wr2, br2):
+    def fitness(neurons, wr1, br1, wr2, br2, LR, decay):
         global X_training, y_training, X_val, y_val
         # Print the hyper-parameters
         print('weight regularizer L1: {0:.2e}'.format(wr1))
@@ -1286,29 +1268,17 @@ if EXAMPLE_11:
         print('bias regularizer L2: {0:.2e}'.format(br2))
 
         # Create the neural network
-        model = create_model(wr1, br1, wr2, br2)
-        model.train(X_training, y_training, validation_data=(X_val, y_val), epochs=1000, print_every=100)
+        model = create_model(neurons, wr1, br1, wr2, br2, LR, decay)
+        model.train(X_training, y_training, validation_data=(X_val, y_val), epochs=5000, print_every=1000)
 
-        return model.evaluate(X_val, y_val)
+        return -model.evaluate(X_val, y_val)
 
-    def readTrainingData():
-        with open("SP/trainingData_pickle.pk", 'rb') as fi1:
-            X_training = pickle.load(fi1)
-        with open("SP/trainingData_Y_pickle.pk", 'rb') as fi2:
-            y_training = pickle.load(fi2)
-        return X_training, y_training
 
-    def readTestData():
-        with open("SP/testData_pickle.pk", 'rb') as fti1:
-            X_test = pickle.load(fti1)
-        with open("SP/testData_Y_pickle.pk", 'rb') as fti2:
-            y_test = pickle.load(fti2)
-        return X_test, y_test
 
     # Default parameters
     X_training, y_training = readTrainingData()
     X_val, y_val = readTestData()
-    default_parameters = [1e-5, 1e-5, 2e-8, 2e-8]
+    default_parameters = [80, 1e-5, 1e-5, 2e-8, 2e-8, 28e-3, 1e-5]
 
 
     #fitness(x=default_parameters)
@@ -1317,7 +1287,7 @@ if EXAMPLE_11:
         search_result = gp_minimize(func=fitness,
                                     dimensions=dimensions,
                                     acq_func="EI",
-                                    n_calls=18,
+                                    n_calls=100,
                                     x0=default_parameters)
 
 
@@ -1337,8 +1307,8 @@ if EXAMPLE_11:
     print(sorted(zip(search_result.func_vals, search_result.x_iters)))
 
     fig = plot_objective_2D(result=search_result,
-                            dimension_identifier1='wr1',
-                            dimension_identifier2='wr2',
+                            dimension_identifier1='LR',
+                            dimension_identifier2='decay',
                             levels=50)
     plt.savefig("wrL.png", dpi=400)
     plt.show()
