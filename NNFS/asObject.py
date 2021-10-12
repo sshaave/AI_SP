@@ -4,16 +4,12 @@ import nnfs
 import pickle
 import matplotlib.pyplot as plt
 import time
-from nnfs.datasets import spiral_data
-from nnfs.datasets import sine_data
+
 from skopt import BayesSearchCV, gp_minimize
 from skopt.plots import plot_convergence, plot_objective_2D
 from skopt.space import Real, Categorical, Integer
-from sklearn.datasets import load_digits
-from sklearn.svm import SVC
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
 from skopt.utils import use_named_args
+import torch
 
 nnfs.init()
 
@@ -1162,8 +1158,10 @@ def readEncoding():
 #-------------------------------------------------------------
 TRAIN_MODEL = False
 LOAD_MODEL = False
-EXAMPLE_11 = True
-DO_BAY_OPT = False
+EXAMPLE_11 = False
+PYTORCH_GPU = True
+
+DO_BAY_OPT = True
 # -------------------------------------------------------------
 if TRAIN_MODEL:
     X_training, y_training = readTrainingData()
@@ -1296,6 +1294,108 @@ if EXAMPLE_11:
             pickle.dump(search_result, f)
     else:
         with open("search_result_pickle.pk", "rb") as f:
+            search_result = pickle.load(f)
+
+
+    #plot_convergence(search_result)
+    #plt.savefig("Convergence.png", dpi=400)
+    print('Search_result.x:')
+    print(f'Neuros: {search_result.x[0]},' +
+          f'WR L1: {search_result.x[1]:.3e},' +
+          f'BR L1: {search_result.x[2]:.3e},' +
+          f'WR L2: {search_result.x[3]:.3e},' +
+          f'BR L2: {search_result.x[4]:.3e},' +
+          f'LR: {search_result.x[5]:.3e},' +
+          f'Decay: {search_result.x[6]:.3e}')
+
+    print("sorted(zip(search_result.func_vals, search_result.x_iters))")
+    print(sorted(zip(search_result.func_vals, search_result.x_iters)))
+
+    fig = plot_objective_2D(result=search_result,
+                            dimension_identifier1='LR',
+                            dimension_identifier2='decay',
+                            levels=50)
+    plt.savefig("LRandDECAY.png", dpi=400)
+    plt.show()
+
+
+if PYTORCH_GPU:
+    print('PYTORCH_GPU')
+
+    if torch.cuda.is_available():
+        device = torch.device("cuda:0")
+        print("Running on the GPU")
+    else:
+        device = torch.device("cpu")
+        print("Running on the CPU")
+
+    dim_neurons = Integer(low=60, high=150, name="neurons")
+    dim_wr1 = Real(low=1e-8, high=1e-5, prior='log-uniform', name='wr1')
+    dim_br1 = Real(low=1e-8, high=1e-5, prior='log-uniform', name='br1')
+    dim_wr2 = Real(low=1e-8, high=1e-5, prior='log-uniform', name='wr2')
+    dim_br2 = Real(low=1e-8, high=1e-5, prior='log-uniform', name='br2')
+    dim_LR = Real(low=1e-3, high=9e-2, prior='log-uniform', name='LR')
+    dim_decay = Real(low=1e-7, high=1e-4, prior='log-uniform', name='decay')
+    dimensions = [dim_neurons, dim_wr1, dim_br1, dim_wr2, dim_br2, dim_LR, dim_decay]
+
+    def create_model(neurons, wr1, br1, wr2, br2, LR, decay):
+        model = Model()
+        # Add layers
+        model.add(Layer_Dense(3, neurons, weight_regularizer_l1=wr1, bias_regularizer_l1=br1, weight_regularizer_l2=wr2, bias_regularizer_l2=br2))
+        model.add(Activation_ReLU())
+        model.add(Layer_Dense(neurons, 148))
+        model.add(Activation_Softmax())
+
+        # Set loss and optimizer objects
+        model.set(
+            loss=Loss_CategoricalCrossentropy(),
+            optimizer=Optimizer_Adam(learning_rate=LR, decay=decay),
+            accuracy=Accuracy_Catergorial()
+        )
+
+        # Finalize the model
+        model.finalize()
+
+        return model
+
+    @use_named_args(dimensions=dimensions)
+    def fitness(neurons, wr1, br1, wr2, br2, LR, decay):
+        global X_training, y_training, X_val, y_val, itera
+        # Print the hyper-parameters
+        print('weight regularizer L1: {0:.2e}'.format(wr1))
+        print('bias regularizer L1: {0:.2e}'.format(br1))
+        print('weight regularizer L2: {0:.2e}'.format(wr2))
+        print('bias regularizer L2: {0:.2e}'.format(br2))
+        itera +=1
+        print(itera)
+        # Create the neural network
+        model = create_model(neurons, wr1, br1, wr2, br2, LR, decay)
+        model.train(X_training, y_training, validation_data=(X_val, y_val), epochs=3000, print_every=1000)
+
+        return -model.evaluate(X_val, y_val)
+
+
+    itera=1
+    # Default parameters
+    X_training, y_training = readTrainingData()
+    X_val, y_val = readTestData()
+    default_parameters = [80, 1e-5, 1e-5, 2e-8, 2e-8, 28e-3, 1e-5]
+
+
+    #fitness(x=default_parameters)
+    # default yields accuracy = 0.710, loss 0.820
+    if DO_BAY_OPT:
+        search_result = gp_minimize(func=fitness,
+                                    dimensions=dimensions,
+                                    acq_func="EI",
+                                    n_calls=70,
+                                    x0=default_parameters)
+
+
+        with open("CUDA_search_result_pickle.pk", 'wb') as f:
+            pickle.dump(search_result, f)
+    else:
+        with open("CUDA_search_result_pickle.pk", "rb") as f:
             search_result = pickle.load(f)
 
 
