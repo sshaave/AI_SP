@@ -10,14 +10,18 @@ from skopt.plots import plot_convergence, plot_objective_2D
 from skopt.space import Real, Categorical, Integer
 from skopt.utils import use_named_args
 import torch
+import torch.nn as nn
 
-nnfs.init()
-
+to_Tensors = True
+if not to_Tensors:
+    import nnfs
+    nnfs.init()
 # Model class
-class Model:
+class Model(nn.Module):
 
     def __init__(self):
         # Create a list of network objects
+        super().__init__()
         self.layers = []
         self.softmax_classifier_output = None
 
@@ -429,8 +433,14 @@ class Layer_Dense:
     def __init__(self, n_inputs, n_neurons,
                  weight_regularizer_l1=0., weight_regularizer_l2=0.,
                  bias_regularizer_l1=0., bias_regularizer_l2=0.):
-        self.weights = 0.01 * np.random.randn(n_inputs, n_neurons)
-        self.biases = np.zeros((1, n_neurons))
+        if to_Tensors:
+            self.weights = 0.01 * torch.randn(n_inputs, n_neurons)
+            self.biases = torch.zeros((1, n_neurons))
+            self.weights = self.weights.to("cuda:0")
+            self.biases = self.biases.to("cuda:0")
+        else:
+            self.weights = 0.01 * np.random.randn(n_inputs, n_neurons)
+            self.biases = np.zeros((1, n_neurons))
         # Set regularization strength
         self.weight_regularizer_l1 = weight_regularizer_l1
         self.weight_regularizer_l2 = weight_regularizer_l2
@@ -439,7 +449,10 @@ class Layer_Dense:
     # Forward pass
     def forward(self, inputs, training):
         self.inputs = inputs
-        self.output = np.dot(inputs, self.weights) + self.biases
+        if to_Tensors:
+            self.output = torch.mm(inputs.float(), self.weights) + self.biases
+        else:
+            self.output = np.dot(inputs, self.weights) + self.biases
 
     # Backward pass
     def backward(self, dvalues):
@@ -520,10 +533,16 @@ class Accuracy:
         comparisons = self.compare(predictions, y)
 
         # Calculate an accuracy
-        accuracy = np.mean(comparisons)
+        if to_Tensors:
+            accuracy = (comparisons > 0).type(torch.float32).mean().item()
+        else:
+            accuracy = np.mean(comparisons)
 
         # Add accumulated sum of matching values and sample count
-        self.accumulated_sum += np.sum(comparisons)
+        if to_Tensors:
+            self.accumulated_sum += (comparisons > 0).type(torch.float32).sum().item()
+        else:
+            self.accumulated_sum += np.sum(comparisons)
         self.accumulated_count += len(comparisons)
 
         # Return accuracy
@@ -572,6 +591,8 @@ class Accuracy_Catergorial(Accuracy):
 
     # Compare predictions to the ground truth values
     def compare(self, predictions, y):
+        if to_Tensors:
+            predictions = torch.from_numpy(predictions)
         if not self.binary and len(y.shape) == 2:
             y = np.argmax(y, axis=1)
         return predictions == y
@@ -1137,18 +1158,30 @@ class Activation_Softmax_Loss_CategoricalCrossentropy():
 # FLAGS
 
 #-------------------------------------------------------------
-def readTrainingData():
-    with open("SP/trainingData_pickle.pk", 'rb') as fi1:
-        X_training = pickle.load(fi1)
-    with open("SP/trainingData_Y_pickle.pk", 'rb') as fi2:
-        y_training = pickle.load(fi2)
+def readTrainingData(pytorch=False):
+    if pytorch:
+        with open("SP/trainingData_Tensor_pickle.pk", 'rb') as fi1:
+            X_training = pickle.load(fi1)
+        with open("SP/trainingData_Y_Tensor_pickle.pk", 'rb') as fi2:
+            y_training = pickle.load(fi2)
+    else:
+        with open("SP/trainingData_pickle.pk", 'rb') as fi1:
+            X_training = pickle.load(fi1)
+        with open("SP/trainingData_Y_pickle.pk", 'rb') as fi2:
+            y_training = pickle.load(fi2)
     return X_training, y_training
 
-def readTestData():
-    with open("SP/testData_pickle.pk", 'rb') as fti1:
-        X_test = pickle.load(fti1)
-    with open("SP/testData_Y_pickle.pk", 'rb') as fti2:
-        y_test = pickle.load(fti2)
+def readTestData(pytorch=False):
+    if pytorch:
+        with open("SP/testData_Tensor_pickle.pk", 'rb') as fti1:
+            X_test = pickle.load(fti1)
+        with open("SP/testData_Y_Tensor_pickle.pk", 'rb') as fti2:
+            y_test = pickle.load(fti2)
+    else:
+        with open("SP/testData_pickle.pk", 'rb') as fti1:
+            X_test = pickle.load(fti1)
+        with open("SP/testData_Y_pickle.pk", 'rb') as fti2:
+            y_test = pickle.load(fti2)
     return X_test, y_test
 def readEncoding():
     with open("SP/Encoding.txt") as tF:
@@ -1158,10 +1191,9 @@ def readEncoding():
 #-------------------------------------------------------------
 TRAIN_MODEL = False
 LOAD_MODEL = False
-EXAMPLE_11 = False
 PYTORCH_GPU = True
 
-DO_BAY_OPT = False
+DO_BAY_OPT = True
 # -------------------------------------------------------------
 t = time.time()
 if TRAIN_MODEL:
@@ -1224,112 +1256,9 @@ if LOAD_MODEL:
     for prediction in predictions:
         print(labels[prediction][2])
 
-
-if EXAMPLE_11:
-    print('Example 11')
-
-    dim_neurons = Integer(low=60, high=150, name="neurons")
-    dim_wr1 = Real(low=1e-8, high=1e-5, prior='log-uniform', name='wr1')
-    dim_br1 = Real(low=1e-8, high=1e-5, prior='log-uniform', name='br1')
-    dim_wr2 = Real(low=1e-8, high=1e-5, prior='log-uniform', name='wr2')
-    dim_br2 = Real(low=1e-8, high=1e-5, prior='log-uniform', name='br2')
-    dim_LR = Real(low=1e-3, high=9e-2, prior='log-uniform', name='LR')
-    dim_decay = Real(low=1e-7, high=1e-4, prior='log-uniform', name='decay')
-    dimensions = [dim_neurons, dim_wr1, dim_br1, dim_wr2, dim_br2, dim_LR, dim_decay]
-
-    def create_model(neurons, wr1, br1, wr2, br2, LR, decay):
-        model = Model()
-        # Add layers
-        model.add(Layer_Dense(3, neurons, weight_regularizer_l1=wr1, bias_regularizer_l1=br1, weight_regularizer_l2=wr2, bias_regularizer_l2=br2))
-        model.add(Activation_ReLU())
-        model.add(Layer_Dense(neurons, 148))
-        model.add(Activation_Softmax())
-
-        # Set loss and optimizer objects
-        model.set(
-            loss=Loss_CategoricalCrossentropy(),
-            optimizer=Optimizer_Adam(learning_rate=LR, decay=decay),
-            accuracy=Accuracy_Catergorial()
-        )
-
-        # Finalize the model
-        model.finalize()
-
-        return model
-
-    @use_named_args(dimensions=dimensions)
-    def fitness(neurons, wr1, br1, wr2, br2, LR, decay):
-        global X_training, y_training, X_val, y_val, itera
-        # Print the hyper-parameters
-        print('weight regularizer L1: {0:.2e}'.format(wr1))
-        print('bias regularizer L1: {0:.2e}'.format(br1))
-        print('weight regularizer L2: {0:.2e}'.format(wr2))
-        print('bias regularizer L2: {0:.2e}'.format(br2))
-        itera +=1
-        print(itera)
-        # Create the neural network
-        model = create_model(neurons, wr1, br1, wr2, br2, LR, decay)
-        model.train(X_training, y_training, validation_data=(X_val, y_val), epochs=3000, print_every=1000)
-
-        return -model.evaluate(X_val, y_val)
-
-
-    itera=1
-    # Default parameters
-    X_training, y_training = readTrainingData()
-    X_val, y_val = readTestData()
-    default_parameters = [80, 1e-5, 1e-5, 2e-8, 2e-8, 28e-3, 1e-5]
-
-
-    #fitness(x=default_parameters)
-    # default yields accuracy = 0.710, loss 0.820
-    if DO_BAY_OPT:
-        search_result = gp_minimize(func=fitness,
-                                    dimensions=dimensions,
-                                    acq_func="EI",
-                                    n_calls=70,
-                                    x0=default_parameters)
-
-
-        with open("search_result_pickle.pk", 'wb') as f:
-            pickle.dump(search_result, f)
-    else:
-        with open("search_result_pickle.pk", "rb") as f:
-            search_result = pickle.load(f)
-
-
-    #plot_convergence(search_result)
-    #plt.savefig("Convergence.png", dpi=400)
-    print('Search_result.x:')
-    print(f'Neuros: {search_result.x[0]},' +
-          f'WR L1: {search_result.x[1]:.3e},' +
-          f'BR L1: {search_result.x[2]:.3e},' +
-          f'WR L2: {search_result.x[3]:.3e},' +
-          f'BR L2: {search_result.x[4]:.3e},' +
-          f'LR: {search_result.x[5]:.3e},' +
-          f'Decay: {search_result.x[6]:.3e}')
-
-    print("sorted(zip(search_result.func_vals, search_result.x_iters))")
-    print(sorted(zip(search_result.func_vals, search_result.x_iters)))
-
-    fig = plot_objective_2D(result=search_result,
-                            dimension_identifier1='LR',
-                            dimension_identifier2='decay',
-                            levels=50)
-    plt.savefig("LRandDECAY.png", dpi=400)
-    plt.show()
-
-
 if PYTORCH_GPU:
     print('PYTORCH_GPU')
 
-    if torch.cuda.is_available():
-        device = torch.device("cuda:0")
-        print("Running on the GPU")
-    else:
-        device = torch.device("cpu")
-        print("Running on the CPU")
-
     dim_neurons = Integer(low=60, high=150, name="neurons")
     dim_wr1 = Real(low=1e-8, high=1e-5, prior='log-uniform', name='wr1')
     dim_br1 = Real(low=1e-8, high=1e-5, prior='log-uniform', name='br1')
@@ -1361,7 +1290,7 @@ if PYTORCH_GPU:
 
     @use_named_args(dimensions=dimensions)
     def fitness(neurons, wr1, br1, wr2, br2, LR, decay):
-        global X_training, y_training, X_val, y_val, itera
+        global X_training, y_training, X_val, y_val, itera, device
         # Print the hyper-parameters
         print('weight regularizer L1: {0:.2e}'.format(wr1))
         print('bias regularizer L1: {0:.2e}'.format(br1))
@@ -1370,7 +1299,10 @@ if PYTORCH_GPU:
         itera +=1
         print(itera)
         # Create the neural network
-        model = create_model(neurons, wr1, br1, wr2, br2, LR, decay)
+
+        model = create_model(neurons, wr1, br1, wr2, br2, LR, decay).to(device)
+
+        print("Line 1281")
         model.train(X_training, y_training, validation_data=(X_val, y_val), epochs=120, print_every=100)
 
         return -model.evaluate(X_val, y_val)
@@ -1378,13 +1310,22 @@ if PYTORCH_GPU:
 
     itera=1
     # Default parameters
-    X_training, y_training = readTrainingData()
-    X_val, y_val = readTestData()
+    X_training, y_training = readTrainingData(pytorch=to_Tensors)
+    X_val, y_val = readTestData(pytorch=to_Tensors)
     default_parameters = [80, 1e-5, 1e-5, 2e-8, 2e-8, 28e-3, 1e-5]
-    X_training = torch.from_numpy(X_training)
-    y_training = torch.from_numpy(y_training)
-    X_val = torch.from_numpy(X_val).to(device)
-    y_val = torch.from_numpy(y_val).to(device)
+
+
+    if torch.cuda.is_available() and to_Tensors:
+        device = torch.device("cuda:0")
+        print("Running on the GPU")
+        X_training = X_training.to(device)
+        X_val = X_val.to(device)
+        y_training = y_training.to(device)
+        y_val = y_val.to(device)
+
+    else:
+        device = torch.device("cpu")
+        print("Running on the CPU")
 
     #fitness(x=default_parameters)
     # default yields accuracy = 0.710, loss 0.820
@@ -1421,7 +1362,11 @@ if PYTORCH_GPU:
                             dimension_identifier1='LR',
                             dimension_identifier2='decay',
                             levels=50)
-    plt.savefig("LRandDECAY.png", dpi=400)
+    plt.savefig("LRandDECAY2.png", dpi=400)
     #plt.show()
 
-print(time.time() - t)          # t = 175 s
+
+
+
+#print(time.time() - t)          # t = 114 s med CPU
+#print(time.time() - t)           # t = 128 s med GPU

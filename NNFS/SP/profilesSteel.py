@@ -2,6 +2,7 @@ import numpy as np
 import pickle
 import os
 import sys
+import torch
 
 # FLAG
 need_to_make_training_data = False
@@ -10533,6 +10534,12 @@ if need_to_make_training_data:
         # dump data into the file
         pickle.dump(X_training, fi)
 
+    with open('trainingData_Tensor_pickle.pk', 'wb') as ft1:
+        pickle.dump(torch.from_numpy(X_training), ft1)
+
+    with open('trainingData_Y_Tensor_pickle.pk', 'wb') as ft2:
+        pickle.dump(torch.from_numpy(y_training), ft2)
+
     with open('trainingData_Y_pickle.pk', 'wb') as fi2:
         pickle.dump(y_training, fi2)
 
@@ -12545,10 +12552,17 @@ if need_to_make_test_data:
 
     with open('testData_pickle.pk', 'wb') as fti:
         # dump data into the file
-        pickle.dump(X_training, fti)
+        pickle.dump(X_test, fti)
+
+    with open('testData_Tensor_pickle.pk', 'wb') as fTi:
+        # dump data into the file
+        pickle.dump(torch.from_numpy(X_test), fTi)
+
+    with open('testData_Y_Tensor_pickle.pk', 'wb') as fTi2:
+        pickle.dump(torch.from_numpy(y_test), fTi2)
 
     with open('testData_Y_pickle.pk', 'wb') as fti2:
-        pickle.dump(y_training, fti2)
+        pickle.dump(y_test, fti2)
 
 for x in range(1, 10):
     print("Tilfelle " + str(x) + ":")
