@@ -604,7 +604,10 @@ class Activation_ReLU:
     def forward(self, inputs, training):
         # Remember input values
         self.inputs = inputs
-        self.output = np.maximum(0, inputs)
+        if to_Tensors:
+            self.output = torch.max(inputs, torch.zeros_like(inputs))
+        else:
+            self.output = np.maximum(0, inputs)
 
     # Backward pass
     def backward(self, dvalues):
@@ -627,9 +630,14 @@ class Activation_Softmax:
         # Remember input values
         self.inputs = inputs
         # Get unnormalized probabilities
-        exp_values = np.exp(inputs - np.max(inputs, axis=1, keepdims=True))
-        # Normalize them for each sample
-        probabilities = exp_values / np.sum(exp_values, axis=1, keepdims=True)
+        if to_Tensors:
+            exp_values = torch.exp(inputs - torch.max(inputs, dim=1, keepdim=True)[0])
+            # Normalize them for each sample
+            probabilities = exp_values / torch.sum(exp_values, dim=1, keepdim=True)
+        else:
+            exp_values = np.exp(inputs - np.max(inputs, axis=1, keepdims=True))
+            # Normalize them for each sample
+            probabilities = exp_values / np.sum(exp_values, axis=1, keepdims=True)
         self.output = probabilities
 
     # Backward pass
@@ -1002,12 +1010,16 @@ class Loss_CategoricalCrossentropy(Loss):
 
     # Forward pass
     def forward(self, y_pred, y_true):
-
+        global itera
         # Number of samples in a batch
         samples = len(y_pred)
         # Clip data to prevent division by 0
         # Clip both sides to not drag mean towards any value
-        y_pred_clipped = np.clip(y_pred, 1e-7, 1 - 1e-7)
+        if to_Tensors:
+            y_pred_clipped = torch.clip(y_pred, 1e-7, 1 - 1e-7)
+            y_true = y_true.type(dtype=torch.int64)
+        else:
+            y_pred_clipped = np.clip(y_pred, 1e-7, 1 - 1e-7)
 
         # Probability for target values -
         # only if categorical labels
